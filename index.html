@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G.I. TECH. AMERICA Corp. - Customer Supply Chain Map</title>
+    <!-- Tailwind CSS for modern look -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Map JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Google Fonts for professional typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Noto Sans KR', 'Montserrat', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff;
+            overflow: hidden;
+        }
+        #map {
+            width: 100vw;
+            height: 100vh;
+            background-color: #ffffff;
+        }
+        /* Custom Leaflet styling to remove zoom control and keep it clean */
+        .leaflet-control-zoom {
+            border: none !important;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+        }
+        .leaflet-control-zoom-in, .leaflet-control-zoom-out {
+            background-color: #ffffff !important;
+            color: #1e293b !important;
+            border: 1px solid #e2e8f0 !important;
+            transition: all 0.2s ease;
+        }
+        .leaflet-control-zoom-in:hover, .leaflet-control-zoom-out:hover {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+        }
+        /* Map Attrib removal for clean presentation screen */
+        .leaflet-control-attribution {
+            display: none !important;
+        }
+        /* High-quality marker animations & designs */
+        .custom-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease;
+        }
+        .custom-marker:hover {
+            transform: scale(1.15);
+            z-index: 9999 !important;
+        }
+        /* Pulse waves for G.I. Tech Hub */
+        .hub-pulse {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.15);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+        /* Distance badge styles */
+        .distance-label {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .distance-badge {
+            background-color: rgba(255, 255, 255, 0.95);
+            border: 1px solid #cbd5e1;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #334155;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            white-space: nowrap;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        /* Line dash animations */
+        .animated-line {
+            stroke-dasharray: 8, 8;
+            animation: dash 35s linear infinite;
+        }
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -1000;
+            }
+        }
+        /* Custom Leaflet Map Tile Styling for Beautiful Grayscale OSM Map */
+        .leaflet-tile {
+            filter: grayscale(100%) brightness(1.08) contrast(1.02);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Dynamic Header -->
+    <div class="absolute top-6 left-8 z-[1000] bg-white/95 backdrop-blur-md px-6 py-4 rounded-2xl shadow-xl border border-slate-100 max-w-lg pointer-events-auto">
+        <div class="flex items-center gap-3 mb-1">
+            <span class="w-3 h-3 rounded-full bg-slate-900 animate-ping"></span>
+            <span class="text-xs font-bold text-slate-500 tracking-wider uppercase">G.I. TECH. AMERICA CORP.</span>
+        </div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">물류망 및 고객사 거리 시각화 지도</h1>
+        <p class="text-xs text-slate-600 font-medium leading-relaxed">
+            인디애나(Crown Point) 본사 기점 주요 고객사 배터리 기가팩토리와의 차량 주행 실거리 및 소요시간 정보입니다.
+        </p>
+    </div>
+
+    <!-- Interactive Filter Panel (Top Right) -->
+    <div class="absolute top-6 right-8 z-[1000] bg-white/95 backdrop-blur-md px-5 py-4 rounded-2xl shadow-xl border border-slate-100 flex flex-col gap-3">
+        <span class="text-xs font-extrabold text-slate-400 tracking-wider uppercase">고객사 필터</span>
+        <div class="flex flex-col gap-2">
+            <button onclick="filterGroup('all')" id="btn-all" class="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-900 font-bold text-xs border border-slate-200 transition-all hover:bg-slate-200">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-700"></span> 전체 보기
+            </button>
+            <button onclick="filterGroup('lg')" id="btn-lg" class="flex items-center gap-3 px-3 py-1.5 rounded-lg text-slate-600 font-semibold text-xs border border-transparent transition-all hover:bg-slate-50">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#A50034]"></span> LG Energy Solution
+            </button>
+            <button onclick="filterGroup('sk')" id="btn-sk" class="flex items-center gap-3 px-3 py-1.5 rounded-lg text-slate-600 font-semibold text-xs border border-transparent transition-all hover:bg-slate-50">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#FF5F00]"></span> SK on
+            </button>
+            <button onclick="filterGroup('sdi')" id="btn-sdi" class="flex items-center gap-3 px-3 py-1.5 rounded-lg text-slate-600 font-semibold text-xs border border-transparent transition-all hover:bg-slate-50">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#00539C]"></span> Samsung SDI
+            </button>
+        </div>
+    </div>
+
+    <!-- Legend (Bottom Right) -->
+    <div class="absolute bottom-8 right-8 z-[1000] bg-white/95 backdrop-blur-md px-5 py-4 rounded-2xl shadow-xl border border-slate-100 w-64 pointer-events-auto">
+        <span class="text-xs font-extrabold text-slate-400 tracking-wider uppercase block mb-3">지도 범례</span>
+        <div class="space-y-2.5">
+            <div class="flex items-center gap-3">
+                <div class="w-6 h-6 bg-slate-900 border-2 border-amber-400 rounded-full flex items-center justify-center text-white font-black text-[9px]">GI</div>
+                <div class="text-xs font-bold text-slate-800">G.I. TECH 본사 <span class="text-[10px] text-slate-400 font-normal">(Crown Point, IN)</span></div>
+            </div>
+            <hr class="border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="w-5 h-5 bg-[#A50034] rounded-full flex items-center justify-center text-white font-extrabold text-[8px]">LG</div>
+                <div class="text-xs font-semibold text-slate-600">LG 에너지솔루션 거점</div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="w-5 h-5 bg-[#FF5F00] rounded-full flex items-center justify-center text-white font-extrabold text-[8px]">SK</div>
+                <div class="text-xs font-semibold text-slate-600">SK On 거점</div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="w-5 h-5 bg-[#00539C] rounded-full flex items-center justify-center text-white font-extrabold text-[8px]">SDI</div>
+                <div class="text-xs font-semibold text-slate-600">삼성 SDI 거점</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <script>
+        // Zooming out slightly to center the whole United States (to include San Jose, CA)
+        const map = L.map('map', {
+            zoomControl: true,
+            center: [38.5, -96.0], 
+            zoom: 4.5,
+            minZoom: 3,
+            maxZoom: 12,
+            zoomSnap: 0.1,
+            zoomAnimation: false 
+        });
+
+        map.zoomControl.setPosition('topleft');
+
+        // Apply Premium High-Detail OSM Tiles (Grayscale filter styling applied in CSS)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        // Core Hub: G.I. TECH. AMERICA Corp.
+        const giTechHub = {
+            name: "G.I. TECH. AMERICA Corp.",
+            address: "10089 Delaware ST, Crown Point, IN 46307",
+            coords: [41.4177, -87.3648]
+        };
+
+        // All Customers with precise geographic coordinates and driving distance details
+        const customers = [
+            // --- LG ENERGY SOLUTION ---
+            {
+                brand: "lg",
+                name: "LG Energy Solution Arizona",
+                address: "335 E. Pecos RD, Queen Creek, Arizona, 85140",
+                coords: [33.2486, -111.6033],
+                distance: "1,718 mi",
+                duration: "25 hr 30 min"
+            },
+            {
+                brand: "lg",
+                name: "LG Energy Solution Michigan, Inc.",
+                address: "1 LG Way, Holland, MI 49423, USA",
+                coords: [42.7548, -86.1012],
+                distance: "141 mi",
+                duration: "2 hr 20 min"
+            },
+            {
+                brand: "lg",
+                name: "LG Energy Solution Vertech Inc.",
+                address: "155 Flanders Road Westborough, MA 01581",
+                coords: [42.2713, -71.6162],
+                distance: "915 mi",
+                duration: "14 hr"
+            },
+            {
+                brand: "lg",
+                name: "HL-GA Battery Company LLC",
+                address: "9728 Hwy 280 E, Ellabell, Georgia 31308",
+                coords: [32.1158, -81.4423],
+                distance: "770 mi",
+                duration: "11 hr 30 min"
+            },
+            {
+                brand: "lg",
+                name: "L-H Battery Company, Inc",
+                address: "8500 Bluegrass Blvd, Jeffersonville, OH 43128",
+                coords: [39.6162, -83.5630],
+                distance: "278 mi",
+                duration: "4 hr 30 min"
+            },
+            {
+                brand: "lg",
+                name: "NextStar Energy Inc.",
+                address: "1 NextStar Way, Windsor, ON N8N 0J8 Canada",
+                coords: [42.3149, -83.0364],
+                distance: "250 mi",
+                duration: "4 hr"
+            },
+            {
+                brand: "lg",
+                name: "Ultium Cells LLC - Spring Hill",
+                address: "301 Donald F Ephlin Pkwy Spring Hill, TN 37174",
+                coords: [35.7512, -86.9298],
+                distance: "450 mi",
+                duration: "6 hr 30 min"
+            },
+            {
+                brand: "lg",
+                name: "Ultium Cells LLC - Warren",
+                address: "7400 Tod Avenue, SW, Warren, Ohio 44481",
+                coords: [41.2384, -80.8198],
+                distance: "350 mi",
+                duration: "5 hr 30 min"
+            },
+
+            // --- SK ON ---
+            {
+                brand: "sk",
+                name: "SK BATTERY AMERICA",
+                address: "1760 SK Blvd, Commerce, GA 30529",
+                coords: [34.2045, -83.4566],
+                distance: "680 mi",
+                duration: "10 hr"
+            },
+            {
+                brand: "sk",
+                name: "SK on Tennessee",
+                address: "2022 Battery Park Dr, Stanton, TN 38069",
+                coords: [35.4645, -89.4054],
+                distance: "430 mi",
+                duration: "6 hr 30 min"
+            },
+            {
+                brand: "sk",
+                name: "HSBMA",
+                address: "5098 US Highway 411, Kingston, GA 30145",
+                coords: [34.2362, -84.9452],
+                distance: "610 mi",
+                duration: "9 hr"
+            },
+
+            // --- SAMSUNG SDI ---
+            {
+                brand: "sdi",
+                name: "Samsung SDI America (Atlantic)",
+                address: "4121 N. Atlantic Blvd., Auburn Hills, MI 48326",
+                coords: [42.6875, -83.2341],
+                distance: "270 mi",
+                duration: "4 hr"
+            },
+            {
+                brand: "sdi",
+                name: "Samsung SDI America (Continental)",
+                address: "50 Continental Dr. Auburn Hills, MI 48326",
+                coords: [42.6789, -83.2115],
+                distance: "271 mi",
+                duration: "4 hr"
+            },
+            {
+                brand: "sdi",
+                name: "Samsung SDI America (San Jose)",
+                address: "3655 North 1st Street, San Jose, CA 95134",
+                coords: [37.3820, -121.9213],
+                distance: "2,130 mi",
+                duration: "31 hr"
+            }
+        ];
+
+        const routeLines = [];
+        const customerMarkers = [];
+        const distanceLabels = [];
+
+        const colors = {
+            lg: "#A50034",
+            sk: "#FF5F00",
+            sdi: "#00539C"
+        };
+
+        // Render G.I. TECH Hub
+        const hubIcon = L.divIcon({
+            className: 'custom-marker',
+            html: `
+                <div class="relative w-12 h-12 flex items-center justify-center">
+                    <div class="hub-pulse"></div>
+                    <div class="w-10 h-10 bg-slate-900 border-[3px] border-amber-400 rounded-full flex items-center justify-center shadow-2xl text-white font-black text-xs z-10">GI</div>
+                </div>
+            `,
+            iconSize: [48, 48],
+            iconAnchor: [24, 24]
+        });
+
+        const hubMarker = L.marker(giTechHub.coords, { icon: hubIcon }).addTo(map);
+        hubMarker.bindPopup(`
+            <div class="p-2">
+                <span class="text-[10px] font-bold text-amber-500 uppercase tracking-wider block">Headquarters Hub</span>
+                <h3 class="text-sm font-black text-slate-800">${giTechHub.name}</h3>
+                <p class="text-xs text-slate-500 mt-1">${giTechHub.address}</p>
+            </div>
+        `);
+
+        // Render All Customers, Routes, and Distance Badges
+        customers.forEach((cust, index) => {
+            // 1. Create brand-specific Marker Icon
+            const iconHtml = `<div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-black text-[10px] shadow-lg border-2 border-white" style="background-color: ${colors[cust.brand]}">${cust.brand.toUpperCase()}</div>`;
+            const custIcon = L.divIcon({
+                className: 'custom-marker',
+                html: iconHtml,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+
+            // 2. Add Customer Marker to map
+            const marker = L.marker(cust.coords, { icon: custIcon }).addTo(map);
+            marker.bindPopup(`
+                <div class="p-2 min-w-[200px]">
+                    <span class="text-[9px] font-bold uppercase tracking-wider block" style="color: ${colors[cust.brand]}">
+                        ${cust.brand === 'lg' ? 'LG Energy Solution' : cust.brand === 'sk' ? 'SK On' : 'Samsung SDI'}
+                    </span>
+                    <h3 class="text-sm font-black text-slate-800 mt-0.5">${cust.name}</h3>
+                    <p class="text-[11px] text-slate-500 mt-1 mb-2 leading-tight">${cust.address}</p>
+                    <hr class="my-1.5 border-slate-100">
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <div class="bg-slate-50 p-1.5 rounded text-center">
+                            <span class="block text-[8px] text-slate-400 font-bold uppercase">자동차 주행 거리</span>
+                            <span class="text-xs font-black text-slate-700">${cust.distance}</span>
+                        </div>
+                        <div class="bg-slate-50 p-1.5 rounded text-center">
+                            <span class="block text-[8px] text-slate-400 font-bold uppercase">예상 시간</span>
+                            <span class="text-xs font-black text-slate-700">${cust.duration}</span>
+                        </div>
+                    </div>
+                </div>
+            `);
+
+            customerMarkers.push({ marker, brand: cust.brand });
+
+            // 3. Draw Connecting Route
+            const routeCoords = [giTechHub.coords, cust.coords];
+            const routeLine = L.polyline(routeCoords, {
+                color: colors[cust.brand],
+                weight: 1.8,
+                opacity: 0.8,
+                dashArray: "6, 8",
+                className: "animated-line"
+            }).addTo(map);
+
+            routeLine.bindPopup(`
+                <div class="p-1 text-center">
+                    <span class="text-xs text-slate-500 font-bold">GI Hub → ${cust.name}</span>
+                    <div class="text-sm font-extrabold text-slate-800 mt-1">${cust.distance} (${cust.duration})</div>
+                </div>
+            `);
+
+            routeLines.push({ line: routeLine, brand: cust.brand });
+
+            // 4. Distance Badge Midpoint placement with offsets to prevent overlaps
+            const midLat = (giTechHub.coords[0] + cust.coords[0]) / 2;
+            const midLng = (giTechHub.coords[1] + cust.coords[1]) / 2;
+            
+            let offsetLat = 0;
+            let offsetLng = 0;
+            if (cust.name.includes("Michigan") || cust.name.includes("Auburn Hills")) {
+                offsetLat = (index % 2 === 0) ? 0.3 : -0.3;
+                offsetLng = (index % 2 === 0) ? -0.4 : 0.4;
+            }
+
+            const labelIcon = L.divIcon({
+                className: 'distance-label',
+                html: `
+                    <div class="distance-badge">
+                        <svg class="w-2.5 h-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                        <span>${cust.distance}</span>
+                    </div>
+                `,
+                iconSize: [80, 20],
+                iconAnchor: [40, 10]
+            });
+
+            const labelMarker = L.marker([midLat + offsetLat, midLng + offsetLng], { icon: labelIcon }).addTo(map);
+            distanceLabels.push({ label: labelMarker, brand: cust.brand });
+        });
+
+        // Dynamic Filtering
+        function filterGroup(brand) {
+            const buttons = ['all', 'lg', 'sk', 'sdi'];
+            buttons.forEach(btn => {
+                const el = document.getElementById(`btn-${btn}`);
+                if (btn === brand) {
+                    el.classList.remove('text-slate-600', 'border-transparent');
+                    el.classList.add('bg-slate-100', 'text-slate-900', 'font-bold', 'border-slate-200');
+                } else {
+                    el.classList.add('text-slate-600', 'border-transparent');
+                    el.classList.remove('bg-slate-100', 'text-slate-900', 'font-bold', 'border-slate-200');
+                }
+            });
+
+            customerMarkers.forEach(item => {
+                if (brand === 'all' || item.brand === brand) {
+                    map.addLayer(item.marker);
+                } else {
+                    map.removeLayer(item.marker);
+                }
+            });
+
+            routeLines.forEach(item => {
+                if (brand === 'all' || item.brand === brand) {
+                    map.addLayer(item.line);
+                } else {
+                    map.removeLayer(item.line);
+                }
+            });
+
+            distanceLabels.forEach(item => {
+                if (brand === 'all' || item.brand === brand) {
+                    map.addLayer(item.label);
+                } else {
+                    map.removeLayer(item.label);
+                }
+            });
+
+            // Handle map viewport positioning based on selected category
+            if (brand === 'all') {
+                map.setView([38.5, -96.0], 4.5);
+            } else if (brand === 'lg') {
+                map.setView([38.0, -93.0], 4.5); // LG stretches Arizona to Massachusetts
+            } else if (brand === 'sk') {
+                map.setView([35.0, -84.5], 6.0); // SK is highly concentrated in Tennessee & Georgia
+            } else if (brand === 'sdi') {
+                map.setView([40.0, -102.0], 4.5); // SDI includes Michigan and San Jose, CA
+            }
+        }
+    </script>
+</body>
+</html>
